@@ -5,10 +5,9 @@ from utils import *
 row_units = [cross(r, cols) for r in rows]
 column_units = [cross(rows, c) for c in cols]
 square_units = [cross(rs, cs) for rs in ('ABC','DEF','GHI') for cs in ('123','456','789')]
-unitlist = row_units + column_units + square_units
+diagonal_units = [[(r+c) for (r,c) in zip(rows, cols)], [(r+c) for (r,c) in zip(rows, cols[::-1])]]
 
-# TODO: Update the unit list to add the new diagonal units
-unitlist = unitlist
+unitlist = row_units + column_units + square_units + diagonal_units
 
 
 # Must be called after all units (including diagonals) are added to the unitlist
@@ -43,8 +42,20 @@ def naked_twins(values):
     and because it is simpler (since the reduce_puzzle function already calls this
     strategy repeatedly).
     """
-    # TODO: Implement this function!
-    raise NotImplementedError
+    for unit in unitlist:
+        # Get all the boxes that have 2 possible values
+        possible_twins = [(box, values[box]) for box in unit if len(values[box]) == 2]
+        # Double loop but only in half of the elements (there is no need to replace the elements twice for each twin)
+        # This is why the inner loop begins with i+1
+        for i in range(len(possible_twins)):
+            for j in range(i+1, len(possible_twins)):
+                if possible_twins[i][1] == possible_twins[j][1]:
+                    # Twin found. Remove each one of the values from all the boxes in the unit (different from the
+                    # twin boxes)
+                    for cell in (cell for cell in unit if cell not in (possible_twins[i][0], possible_twins[j][0])):
+                        for digit in possible_twins[i][1]:
+                            values[cell] = values[cell].replace(digit, '')
+    return values
 
 
 def eliminate(values):
@@ -63,8 +74,12 @@ def eliminate(values):
     dict
         The values dictionary with the assigned values eliminated from peers
     """
-    # TODO: Copy your code from the classroom to complete this function
-    raise NotImplementedError
+    for k,v in values.items():
+        if len(v) == 1:
+            # Remove peers
+            for peer in peers[k]:
+                values[peer] = values[peer].replace(v, '')
+    return values
 
 
 def only_choice(values):
@@ -87,8 +102,13 @@ def only_choice(values):
     -----
     You should be able to complete this function by copying your code from the classroom
     """
-    # TODO: Copy your code from the classroom to complete this function
-    raise NotImplementedError
+    for unit in unitlist:
+        for digit in '123456789':
+            places_counter = [box for box in unit if digit in values[box]]
+            if len(places_counter) == 1:
+                # The digit is present in the unit just once
+                values[places_counter[0]] = digit
+    return values
 
 
 def reduce_puzzle(values):
@@ -105,8 +125,34 @@ def reduce_puzzle(values):
         The values dictionary after continued application of the constraint strategies
         no longer produces any changes, or False if the puzzle is unsolvable 
     """
-    # TODO: Copy your code from the classroom and modify it to complete this function
-    raise NotImplementedError
+    stalled = False
+    while not stalled:
+        # Check how many boxes have a determined value
+        solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
+
+        # Eliminate Strategy
+        for k, v in values.items():
+            if len(v) == 1:
+                # Remove peers
+                for peer in peers[k]:
+                    values[peer] = values[peer].replace(v, '')
+
+        # Only Choice Strategy
+        for unit in unitlist:
+            for digit in '123456789':
+                places_counter = [box for box in unit if digit in values[box]]
+                if len(places_counter) == 1:
+                    # The digit is present in the unit
+                    values[places_counter[0]] = digit
+
+        # Check how many boxes have a determined value, to compare
+        solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
+        # If no new values were added, stop the loop.
+        stalled = solved_values_before == solved_values_after
+        # Sanity check, return False if there is a box with zero available values:
+        if len([box for box in values.keys() if len(values[box]) == 0]):
+            return False
+    return values
 
 
 def search(values):
@@ -128,8 +174,44 @@ def search(values):
     You should be able to complete this function by copying your code from the classroom
     and extending it to call the naked twins strategy.
     """
-    # TODO: Copy your code from the classroom to complete this function
-    raise NotImplementedError
+    values = reduce_puzzle(values)
+
+    # Sanity check
+    if not values:
+        return False
+
+    # Variables to choose the most promising box
+    min_length = 10
+    min_box = None
+
+    # Check if we have a solution already. Otherwise pick the optimal candidate
+    solved_values = 0
+    for box, choices in values.items():
+        if len(choices) == 1:
+            solved_values += 1
+        elif len(choices) < min_length:
+            # This is the most promising box so far
+            min_length = len(choices)
+            min_box = box
+
+    if solved_values == 81:
+        # Puzzle solved!
+        return values
+
+    # Pick one of the choices for the best candidate
+    choices = values[min_box]
+    for choice in choices:
+        # Copy the solution
+        new_puzzle = dict(values)
+        new_puzzle[min_box] = choice
+        # Search for a solution here
+        sol = search(new_puzzle)
+        if sol:
+            # Success!
+            return sol
+
+    # We couldn't find a solution
+    return False
 
 
 def solve(grid):
@@ -164,5 +246,6 @@ if __name__ == "__main__":
 
     except SystemExit:
         pass
-    except:
+    except Exception as ex:
         print('We could not visualize your board due to a pygame issue. Not a problem! It is not a requirement.')
+
